@@ -2,8 +2,8 @@
 
 import { db } from '../../../lib/firebase_admin';
 
-// Modal Webhook URL (Cloud Scraper)
-const MODAL_WEBHOOK_URL = "https://erichomepro-ai-precision-crm-scout-scout-webhook.modal.run";
+// Modal Webhook URL (Cloud Scraper) - CORRECTED: use double dash between workspace and app name
+const MODAL_WEBHOOK_URL = "https://erichomepro--ai-precision-crm-scout-scout-webhook.modal.run";
 
 export async function launchScout(formData: FormData) {
     const query = formData.get('query') as string;

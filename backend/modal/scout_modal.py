@@ -8,7 +8,7 @@ from datetime import datetime
 # We need Playwright (and browsers), Firebase Admin, and Gemini
 image = (
     modal.Image.debian_slim()
-    .pip_install("playwright", "firebase-admin", "google-generativeai", "fastapi")
+    .pip_install("playwright", "firebase-admin", "google-generativeai", "fastapi[standard]")
     .run_commands("playwright install-deps", "playwright install chromium")
 )
 
@@ -240,13 +240,12 @@ async def run_scout_logic(query: str, tenant_id: str = "default", job_id: str = 
 
 
 @app.function()
-@modal.web_endpoint(method="POST")
-async def scout_webhook(request: Request):
+@modal.fastapi_endpoint(method="POST")
+def scout_webhook(item: dict):
     """
     Public Webhook: Receives JSON { query, tenantId, jobId }
     Triggers the background scraper.
     """
-    item = await request.json()
     query = item.get("query")
     tenant_id = item.get("tenantId")
     job_id = item.get("jobId")
