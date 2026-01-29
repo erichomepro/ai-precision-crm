@@ -1,8 +1,6 @@
 'use server'
 
 import { db } from '../../../lib/firebase_admin';
-import { spawn } from 'child_process';
-import path from 'path';
 
 // Modal Webhook URL (Cloud Scraper)
 const MODAL_WEBHOOK_URL = "https://erichomepro-ai-precision-crm-scout-scout-webhook.modal.run";

@@ -1,47 +1,42 @@
+
 const admin = require('firebase-admin');
-const fs = require('fs');
+const { getFirestore } = require('firebase-admin/firestore');
 
-// Init Firebase
+// Initialize with application default credentials (works if GOOGLE_APPLICATION_CREDENTIALS is set)
+// Or reuse existing config logic.
+// Since we are in the project root, we can try to use the project's firebase_admin lib if compiling TS, 
+// but a standalone JS script is safer/faster for debug.
+
+// We need the service account. It's in .env.local usually.
+require('dotenv').config({ path: '.env.local' });
+
+const serviceAccount = {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, '\n'),
+};
+
 if (!admin.apps.length) {
-    try {
-        const serviceAccount = require('./serviceAccountKey.json');
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
-        });
-    } catch (e) {
-        // Fallback to default if no key file (ADC)
-        admin.initializeApp({
-            projectId: 'ai-precision-crm'
-        });
-    }
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+    });
 }
-const db = admin.firestore();
 
-async function checkLatestJob() {
-    console.log("Checking latest job...");
-    const jobsRef = db.collection('jobs');
-    const q = jobsRef.orderBy('createdAt', 'desc').limit(1);
-    const snapshot = await q.get();
+const db = getFirestore();
 
-    if (snapshot.empty) {
-        console.log("No jobs found.");
-        return;
-    }
-
-    const doc = snapshot.docs[0];
-    const data = doc.data();
-
-    console.log(`Job ID: ${doc.id}`);
-    console.log(`Status: ${data.status}`);
-    if (data.error) console.log(`ERROR FIELD: ${data.error}`);
-    console.log(`Query: ${data.query}`);
-    console.log(`Created At: ${data.createdAt}`);
-    console.log(`Logs:`);
-    if (data.logs && data.logs.length) {
-        data.logs.slice(-5).forEach(log => console.log(` - [${log.time}] ${log.msg}`));
+async function checkJob(jobId) {
+    console.log(`Checking Job: ${jobId}`);
+    const doc = await db.collection('jobs').doc(jobId).get();
+    if (!doc.exists) {
+        console.log("Job not found!");
     } else {
-        console.log(" - No logs yet.");
+        console.log("Job Data:", JSON.stringify(doc.data(), null, 2));
     }
 }
 
-checkLatestJob().catch(console.error);
+const jobId = process.argv[2];
+if (jobId) {
+    checkJob(jobId).catch(console.error);
+} else {
+    console.log("Please provide Job ID");
+}
