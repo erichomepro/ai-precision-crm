@@ -58,7 +58,7 @@ export async function launchScout(formData: FormData) {
 
                 // Update job status to failed if immediate connection fails
                 await jobRef.update({ status: 'FAILED', error: `Webhook Error: ${errText}` });
-                return { success: false, message: `Could not start cloud agent: ${response.statusText}` };
+                return { success: false, message: `Could not start cloud agent: ${response.statusText} (Target: ${MODAL_WEBHOOK_URL})` };
             }
         } catch (netError: any) {
             console.error(`[Server Action] Network Error calling Modal: ${netError.message}`);
