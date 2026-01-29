@@ -129,14 +129,21 @@ export default function LeadsPage() {
             limit(100)
         );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedLeads: Lead[] = [];
-            snapshot.forEach((doc) => {
-                fetchedLeads.push({ id: doc.id, ...doc.data() } as Lead);
-            });
-            setLeads(fetchedLeads);
-            setLoading(false);
-        });
+        const unsubscribe = onSnapshot(q,
+            (snapshot) => {
+                const fetchedLeads: Lead[] = [];
+                snapshot.forEach((doc) => {
+                    fetchedLeads.push({ id: doc.id, ...doc.data() } as Lead);
+                });
+                setLeads(fetchedLeads);
+                setLoading(false);
+            },
+            (error) => {
+                console.error("Firestore Error:", error);
+                setLoading(false);
+                // Optional: set an error state here to show in UI
+            }
+        );
 
         return () => unsubscribe();
     }, [user]);

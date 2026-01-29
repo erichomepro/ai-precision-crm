@@ -86,6 +86,13 @@ async def run_scout_logic(query: str, tenant_id: str = "default", job_id: str = 
         search_url = f"https://www.google.com/maps/search/{query}"
         try:
             await page.goto(search_url, timeout=60000)
+            title = await page.title()
+            content = await page.content()
+            await log_remote(f"Page Loaded. Title: '{title}'. Length: {len(content)}")
+            
+            if "Robot" in title or "CAPTCHA" in content:
+                 await log_remote("[WARNING] Google CAPTCHA/Anti-bot detected!")
+
             await page.wait_for_selector('div[role="feed"], a[href*="/maps/place"]', timeout=20000)
         except Exception as e:
             await log_remote(f"Navigation/Selector Warning: {e}. Trying to scrape whatever is visible.")
