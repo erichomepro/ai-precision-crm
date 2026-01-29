@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '../../../../../lib/firebase_admin';
 
 // Modal Webhook URL (Cloud Scraper)
-const MODAL_WEBHOOK_URL = "https://lisac-ai-precision-crm-scout-scout-webhook.modal.run";
+const MODAL_WEBHOOK_URL = "https://erichomepro-ai-precision-crm-scout-scout-webhook.modal.run";
 
 export async function POST(req: Request) {
     try {

@@ -5,7 +5,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 
 // Modal Webhook URL (Cloud Scraper)
-const MODAL_WEBHOOK_URL = "https://lisac-ai-precision-crm-scout-scout-webhook.modal.run";
+const MODAL_WEBHOOK_URL = "https://erichomepro-ai-precision-crm-scout-scout-webhook.modal.run";
 
 export async function launchScout(formData: FormData) {
     const query = formData.get('query') as string;

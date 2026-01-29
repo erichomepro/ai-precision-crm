@@ -237,13 +237,16 @@ async def run_scout_logic(query: str, tenant_id: str = "default", job_id: str = 
 
     return {"success": True, "count": saved_count}
 
+
+
 @app.function()
 @modal.web_endpoint(method="POST")
-async def scout_webhook(item: dict):
+async def scout_webhook(request: Request):
     """
     Public Webhook: Receives JSON { query, tenantId, jobId }
     Triggers the background scraper.
     """
+    item = await request.json()
     query = item.get("query")
     tenant_id = item.get("tenantId")
     job_id = item.get("jobId")
