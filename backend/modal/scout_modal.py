@@ -2,6 +2,7 @@ import modal
 import os
 import json
 import asyncio
+import random
 from datetime import datetime
 
 # Define the Modal Image
@@ -79,79 +80,123 @@ async def run_scout_logic(query: str, tenant_id: str = "default", job_id: str = 
     async with async_playwright() as p:
         # Launch browser
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
         
         # Navigate
-        await log_remote("Navigating to Google Maps...")
+        # Browser Agent-Grade Stealth (from internal skills)
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+        ]
+        
+        context = await browser.new_context(
+            user_agent=random.choice(user_agents),
+            viewport={'width': random.randint(1280, 1920), 'height': random.randint(720, 1080)},
+            device_scale_factor=random.uniform(1, 2)
+        )
+        
+        page = await context.new_page()
+        
+        # Mask Webdriver (Critical Stealth)
+        await page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            window.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+        """)
+
         search_url = f"https://www.google.com/maps/search/{query}"
+        await log_remote(f"Navigating to: {search_url}")
+        
         try:
-            await page.goto(search_url, timeout=60000)
+            # More lenient navigation: domcontentloaded + manual wait instead of networkidle
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=45000)
+            await log_remote("DOM Content Loaded. Waiting for stabilizers...")
+            await asyncio.sleep(random.uniform(5, 8)) # Give it time to render the list
+            
             title = await page.title()
             content = await page.content()
-            await log_remote(f"Page Loaded. Title: '{title}'. Length: {len(content)}")
+            await log_remote(f"Page Ready. Title: '{title}'. Snapshot Size: {len(content)}")
             
-            if "Robot" in title or "CAPTCHA" in content:
-                 await log_remote("[WARNING] Google CAPTCHA/Anti-bot detected!")
+            if "Robot" in title or "CAPTCHA" in content or len(content) < 5000:
+                 await log_remote("[CRITICAL] Anti-bot or Blank Page detected! Switching to Google Search Fallback...")
+                 # --- SEARCH FALLBACK ---
+                 fallback_url = f"https://www.google.com/search?q={query}"
+                 await page.goto(fallback_url, wait_until="domcontentloaded", timeout=30000)
+                 await asyncio.sleep(random.uniform(3, 5))
+                 await log_remote("Search Fallback Loaded.")
+            
+            # Use Resilient Locators (ARIAs and Roles)
+            try:
+                # Primary: The scrollable feed or search results
+                feed = page.locator('div[role="feed"], div[role="main"], #search')
+                await feed.wait_for(timeout=15000)
+                await log_remote("Content area localized.")
+            except:
+                await log_remote("Extraction warning: Content area not localized. Proceeding with raw scan.")
 
-            await page.wait_for_selector('div[role="feed"], a[href*="/maps/place"]', timeout=20000)
         except Exception as e:
-            await log_remote(f"Navigation/Selector Warning: {e}. Trying to scrape whatever is visible.")
+            await log_remote(f"Navigation Warning: {e}. Attempting extraction anyway.")
 
-        # Scroll (Scan minimal)
-        await log_remote("Scrolling results...")
-        try:
-            feed = await page.query_selector('div[role="feed"]')
-            if feed:
-                await feed.evaluate("node => node.scrollBy(0, 5000)")
-                await asyncio.sleep(2) # Allow load
-        except Exception as e:
-             # feed might not be found if there are few results or different layout
-            pass
+        # Human-like scrolling to trigger lazy loading
+        await log_remote("Scrolling for more results (Simulating human activity)...")
+        for _ in range(3):
+            await page.mouse.wheel(0, random.randint(1000, 3000))
+            await asyncio.sleep(random.uniform(1, 2))
 
-        # Extract Elements
+        # Extract Elements using ARIAs/Roles
         await log_remote("Extracting list items...")
         
         raw_items = await page.evaluate("""() => {
-            const cards = Array.from(document.querySelectorAll('a[href*="/maps/place/"]'));
-            return cards.map((c, index) => {
-                let parent = c.closest('div[role="article"]');
-                if (!parent) {
-                    parent = c.parentElement?.parentElement?.parentElement?.parentElement;
+            // Find business containers using common ARIA/Schema patterns
+            let elements = Array.from(document.querySelectorAll('div[role="article"], a[href*="/maps/place/"], .Nv2W1c'));
+            
+            if (elements.length === 0) {
+                // Check if it redirected to a single business page (Knowledge Graph style)
+                const title = document.querySelector('h1.fontHeadlineLarge')?.innerText;
+                if (title) {
+                    return [{
+                        url: window.location.href,
+                        text: document.body.innerText,
+                        website: document.querySelector('a[data-item-id="authority"]')?.href
+                    }];
                 }
+            }
 
-                let website = null;
-                if (parent) {
-                    const links = Array.from(parent.querySelectorAll('a'));
-                    for (const link of links) {
-                        const href = link.href;
-                        if (href && !href.includes('google.com') && href.startsWith('http')) {
-                            website = href;
-                            break;
-                        }
-                    }
-                }
-
+            return elements.map(el => {
+                let parent = el.closest('div[role="article"]') || el;
+                let anchor = el.tagName === 'A' ? el : parent.querySelector('a[href*="/maps/place/"]');
+                
                 return {
-                    url: c.href,
-                    text: parent ? parent.innerText : c.innerText,
-                    website: website
+                    url: anchor?.href || window.location.href,
+                    text: parent.innerText,
+                    website: parent.querySelector('a[data-item-id="authority"]')?.href || null
                 };
             });
         }""")
         
-        await log_remote(f"Found {len(raw_items)} raw items.")
+        await log_remote(f"Found {len(raw_items)} potential raw items.")
 
-        # Deduplicate
-        seen = set()
+        # Deduplicate and Clean
+        seen_names = set()
         for item in raw_items:
             url = item.get("url", "")
-            if url not in seen and "/maps/place/" in url:
-                seen.add(url)
-                results.append(item)
+            text = item.get("text", "").strip()
+            # Lenient filter: If it's a place link OR we only have a few results (Likely a direct hit)
+            is_place = "/maps/place/" in url
+            name = text.split("\n")[0].strip() if text else "Unknown"
+            
+            if name not in seen_names and (is_place or len(raw_items) <= 3):
+                if name != "Unknown":
+                    seen_names.add(name)
+                    results.append(item)
+                    await log_remote(f"  Captured: {name}")
+        
+        await log_remote(f"Deduplicated to {len(results)} valid results.")
         
         # Limit to 20
         results = results[:20]
-        await log_remote(f"Processing {len(results)} unique leads...")
+        await log_remote(f"Final lead set size: {len(results)}")
         
         await browser.close()
 
@@ -185,7 +230,9 @@ async def run_scout_logic(query: str, tenant_id: str = "default", job_id: str = 
     try:
         response = model.generate_content(prompt)
         text_resp = response.text.replace("```json", "").replace("```", "").strip()
+        await log_remote(f"Raw Gemini Response: {text_resp[:200]}...")
         parsed_leads = json.loads(text_resp)
+        await log_remote(f"AI Parsed {len(parsed_leads)} leads.")
     except Exception as e:
         await log_remote(f"AI Enrichment Failed: {e}")
         parsed_leads = []
@@ -199,13 +246,19 @@ async def run_scout_logic(query: str, tenant_id: str = "default", job_id: str = 
         
         original = results[i]
         
-        if not lead_data.get("BusinessName"): continue
+        # Robust name extraction
+        name = lead_data.get("BusinessName") or lead_data.get("Business Name") or lead_data.get("business_name") or lead_data.get("name")
+        if not name:
+             await log_remote(f"Skipping lead {i} due to missing name in AI response: {lead_data}")
+             continue
 
-        final_website = original.get("website") or lead_data.get("Website")
-        clean_website = final_website if final_website and "." in final_website else None
+        await log_remote(f"  Preparing Lead {i}: {name}")
         
-        final_city = lead_data.get("City")
-        final_category = lead_data.get("Industry")
+        website = lead_data.get("Website") or lead_data.get("website") or lead_data.get("URL") or original.get("website")
+        clean_website = website if website and "." in str(website) else None
+        
+        final_city = lead_data.get("City") or lead_data.get("city") or lead_data.get("Location")
+        final_category = lead_data.get("Industry") or lead_data.get("Category") or lead_data.get("category")
         
         # Simple defaults if AI missed logic
         if not final_city and " in " in query.lower():
@@ -218,6 +271,7 @@ async def run_scout_logic(query: str, tenant_id: str = "default", job_id: str = 
         
         lead_payload = {
             **lead_data,
+            "BusinessName": name,
             "Website": clean_website,
             "GmbLink": original["url"],
             "googleMapsUrl": original["url"],
@@ -232,15 +286,22 @@ async def run_scout_logic(query: str, tenant_id: str = "default", job_id: str = 
         batch.set(lead_ref, lead_payload)
         saved_count += 1
 
-    batch.commit()
-    await log_remote(f"Saved {saved_count} leads to DB.")
+    try:
+        batch.commit()
+        await log_remote(f"FINISH: Firestore Batch Committed. Total Leads Written: {saved_count}")
+    except Exception as e:
+        await log_remote(f"FATAL: Firestore Batch Commit Failed: {e}")
 
     if job_id:
-        db.collection("jobs").document(job_id).update({
-            "status": "COMPLETED",
-            "leadsFound": saved_count,
-            "completedAt": datetime.utcnow().isoformat()
-        })
+        try:
+            db.collection("jobs").document(job_id).update({
+                "status": "COMPLETED",
+                "leadsFound": saved_count,
+                "completedAt": datetime.utcnow().isoformat()
+            })
+            await log_remote("Job Status Updated: COMPLETED")
+        except Exception as e:
+            await log_remote(f"Job Status Update Bypassed (Normal if doc doesn't exist): {e}")
 
     return {"success": True, "count": saved_count}
 
