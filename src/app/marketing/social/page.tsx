@@ -762,6 +762,6 @@ export default function SocialPage() {
                 </div>
             )}
         </div>
-    </div >
+    </div>
     );
 }
