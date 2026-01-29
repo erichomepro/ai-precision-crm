@@ -4,9 +4,12 @@ import { db } from '../../../lib/firebase_admin';
 import { spawn } from 'child_process';
 import path from 'path';
 
+// Modal Webhook URL (Cloud Scraper)
+const MODAL_WEBHOOK_URL = "https://lisac-ai-precision-crm-scout-scout-webhook.modal.run";
+
 export async function launchScout(formData: FormData) {
     const query = formData.get('query') as string;
-    const userId = formData.get('userId') as string; // NEW: Get userId
+    const userId = formData.get('userId') as string;
 
     if (!query) {
         return { success: false, message: 'Query is required' };
@@ -26,33 +29,48 @@ export async function launchScout(formData: FormData) {
         await jobRef.set({
             type: 'SCOUT',
             query: query,
-            tenantId: userId, // KEY: Use userId as the scope/tenant
-            userId: userId,   // Also explicit userId for clarity
+            tenantId: userId,
+            userId: userId,
             status: 'PENDING',
             createdAt: new Date().toISOString(),
             isManual: true,
-            engine: 'python_spawn'
+            engine: 'modal_cloud' // Updated engine name
         });
 
-        // 2. Spawn Python Script
-        // We need the absolute path to the execution folder
-        const projectRoot = process.cwd();
-        const scriptPath = path.join(projectRoot, 'execution', 'universal_scraper.py');
+        // 2. Trigger Cloud Scraper (Modal)
+        console.log(`[Server Action] Triggering Cloud Scraper at: ${MODAL_WEBHOOK_URL}`);
 
-        console.log(`[Server Action] Spawning script at: ${scriptPath}`);
+        try {
+            const response = await fetch(MODAL_WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: query,
+                    tenantId: userId, // Pass userId as tenantId for context
+                    jobId: jobId
+                })
+            });
 
-        // Spawn detached process so it keeps running even if the request finishes
-        const pythonProcess = spawn('python', [scriptPath, query, userId, jobId], { // PASS userId
-            cwd: projectRoot,
-            detached: true,
-            stdio: 'ignore' // or 'inherit' for debugging, but 'ignore' for detached
-        });
+            if (!response.ok) {
+                const errText = await response.text();
+                // Log but don't crash the user UI, returning success as job is queued
+                console.error(`[Server Action] Modal Webhook Error: ${response.status} ${errText}`);
 
-        pythonProcess.unref(); // Allow Node to exit/continue without waiting for Python
+                // Update job status to failed if immediate connection fails
+                await jobRef.update({ status: 'FAILED', error: `Webhook Error: ${errText}` });
+                return { success: false, message: `Could not start cloud agent: ${response.statusText}` };
+            }
+        } catch (netError: any) {
+            console.error(`[Server Action] Network Error calling Modal: ${netError.message}`);
+            await jobRef.update({ status: 'FAILED', error: `Network Error: ${netError.message}` });
+            return { success: false, message: `Cloud connection failed: ${netError.message}` };
+        }
 
         return {
             success: true,
-            message: `Scout Launched! Job ID: ${jobId}`,
+            message: `Scout Launched! Job ID: ${jobId} (Cloud)`,
             jobId: jobId
         };
 
