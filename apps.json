@@ -1,0 +1,26 @@
+﻿[
+  {
+    "App ID": "ap-kIlFZ6Nws5Steq7CyxcbPo",
+    "Description": "ai-precision-crm-agent",
+    "State": "deployed",
+    "Tasks": "0",
+    "Created at": "2026-01-23 00:25:49-07:00",
+    "Stopped at": null
+  },
+  {
+    "App ID": "ap-0uaumgNNRjGTx3yoWJ1Xbn",
+    "Description": "ai-precision-crm-scout",
+    "State": "deployed",
+    "Tasks": "0",
+    "Created at": "2026-01-28 20:57:46-07:00",
+    "Stopped at": null
+  },
+  {
+    "App ID": "ap-B0ZSXqyQoXPYpVBManqrhS",
+    "Description": "ai-precision-crm-scout",
+    "State": "stopped",
+    "Tasks": "0",
+    "Created at": "2026-01-28 20:55:13-07:00",
+    "Stopped at": "2026-01-28 20:57:03-07:00"
+  }
+]

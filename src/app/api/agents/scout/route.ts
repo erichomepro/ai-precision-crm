@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { spawn } from 'child_process';
-import path from 'path';
 import { db } from '../../../../../lib/firebase_admin';
+
+// Modal Webhook URL (Cloud Scraper)
+const MODAL_WEBHOOK_URL = "https://lisac-ai-precision-crm-scout-scout-webhook.modal.run";
 
 export async function POST(req: Request) {
     try {
@@ -10,7 +11,7 @@ export async function POST(req: Request) {
 
         if (!query) return NextResponse.json({ error: 'Query required' }, { status: 400 });
 
-        // 1. Create Job
+        // 1. Create Job in Firestore (Pending)
         const jobRef = await db.collection('jobs').add({
             type: 'SCOUT',
             query: query,
@@ -23,39 +24,35 @@ export async function POST(req: Request) {
         const jobId = jobRef.id;
         console.log(`[API] Job Created: ${jobId}`);
 
-        // 2. Spawn Scraper (Node Engine - maps_scraper.js)
-        const scriptPath = path.join(process.cwd(), 'execution', 'maps_scraper.js');
-        const logPath = path.join(process.cwd(), 'scout_launch.log');
+        // 2. Trigger Cloud Scraper (Modal)
+        console.log(`[API] Triggering Cloud Scraper at: ${MODAL_WEBHOOK_URL}`);
 
-        console.log(`[API] Spawning Node: ${scriptPath} "${query}"`);
-
-        // Robust Logging
-        let stdioConfig: any = 'ignore';
-        try {
-            const fs = require('fs');
-            const out = fs.openSync(logPath, 'a');
-            const err = fs.openSync(logPath, 'a');
-            stdioConfig = ['ignore', out, err];
-        } catch (e) {
-            console.error('[API] Log file open failed, using ignore:', e);
-        }
-
-        const scraperProcess = spawn(process.execPath, [scriptPath, query, tenantId || 'default', jobId], {
-            cwd: process.cwd(),
-            detached: true,
-            stdio: stdioConfig
+        // Fire and forget (or await acknowledgement)
+        const response = await fetch(MODAL_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query: query,
+                tenantId: tenantId || 'default',
+                jobId: jobId
+            })
         });
 
-        scraperProcess.unref();
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Modal Webhook Failed: ${response.status} ${errText}`);
+        }
 
         return NextResponse.json({
             success: true,
             jobId: jobId,
-            message: 'Scout deployed (Node.js).'
+            message: 'Scout deployed to Cloud (Modal).'
         });
 
     } catch (error: any) {
-        console.error('[API] Spawn failed:', error);
+        console.error('[API] Scout Trigger Failed:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
